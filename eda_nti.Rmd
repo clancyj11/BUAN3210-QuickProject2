@@ -1,0 +1,708 @@
+---
+title: "Final Project Appendix"
+author:
+output: 
+  html_document:
+    code_download: true
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+# Project Goal
+The goal for this analysis is to determine whether the Houston Rocket's offensive strategy is a valid method to improving win percentage. Houston is the only team in the NBA that is fully embracing Mike D'Antoni's fast paced, high shooting volume offense, and it seems to be having a lot of success. This project provides an in depth analysis on which scoring statistics positively and negatively impact winning, so that other teams may take and adapt this strategy to suit their personnel.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup and Preprocessing
+```{r clear-environment, echo = FALSE}
+# Clear environment of variables and functions
+rm(list = ls(all = TRUE))
+
+# Clear environmet of packages
+if (is.null(sessionInfo()$otherPkgs) == FALSE) lapply(paste("package:", names(sessionInfo()$otherPkgs), sep = ""), detach, character.only = TRUE, unload = TRUE)
+```
+
+## Import packages
+```{r message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(kableExtra)
+library(plotly)
+library(stringr)
+library(RColorBrewer)
+library(forcats)
+```
+
+## Import datasets
+```{r}
+teamStat <- read.csv("teamStat.csv") # TEAM STATS
+opponentStat <- read.csv("opponStat.csv") # Only used for join
+winLoss <- read.csv("winLoss.csv") # Only used for join
+```
+
+## Rename columns
+```{r}
+names(opponentStat)[names(opponentStat)=="PTS"] <- "PTS_ALLOWED"
+names(teamStat)[names(teamStat)=="PTS"] <- "PTS_FOR"
+```
+
+## Reorder and join columns from data
+```{r}
+# Reorder data so that cbind function will work correctly
+teamStat <- teamStat[order(teamStat$Team),]
+opponentStat <- opponentStat[order(opponentStat$Team),]
+winLoss <- winLoss[order(winLoss$Team),]
+
+# Join the points allowed column to teamStat data
+teamStat <- cbind(teamStat, PTS_ALLOWED = opponentStat$PTS_ALLOWED)
+# Join Win and Losses column to teamStat data
+teamStat <- cbind(teamStat, W = winLoss$W)
+teamStat <- cbind(teamStat, L = winLoss$L)
+teamStat <- cbind(teamStat, Pace = winLoss$Pace)
+
+# Reorder by Wins
+teamStat <- arrange(teamStat, -W)
+```
+
+## Convert variables to factors
+```{r}
+# Convert necessary variables to factors
+teamStat$Team <- as.factor(teamStat$Team)
+teamStat$Year <- as.factor(teamStat$Year)
+```
+
+## Add columns
+```{r}
+# Add Playoffs variable
+teamStat$Playoffs = grepl("\\*", teamStat$Team)
+
+# Add pythagorean expectation column
+# Output is the EXPECTED win to loss ratio for each team (i.e. 0.75 = 75% win percentage)
+teamStat$PYTHAG_WIN <- teamStat$PTS_FOR ^ 13.91 / (teamStat$PTS_FOR ^ 13.91 + teamStat$PTS_ALLOWED ^ 13.91)
+
+# Add the ACTUAL win-loss ratio
+teamStat$WIN_PERCENTAGE <- teamStat$W / (teamStat$W + teamStat$L)
+
+# Add effective field goal percentage for teamStat
+teamStat$eFG. <- (teamStat$FG + (0.5 * teamStat$X3P)) / teamStat$FGA
+
+# Add 3PAr variable
+teamStat$X3PAr <- teamStat$X3PA / teamStat$FGA
+```
+
+# Univariate non-graphical analysis
+```{r}
+head(teamStat)
+```
+
+**Comments**
+
+X3P = Number of three pointers made in that year
+
+X3PA = Number of three pointers attempted in that year
+
+X3P. = Three point percentage
+
+X2P, X2PA, and X2P. have same definitions but for two point shots
+
+```{r}
+str(teamStat)
+```
+
+```{r}
+summary(teamStat)
+```
+
+# Univariate Graphical Analysis
+## Numeric Variables
+
+**Function for histogram-boxplot combination**
+```{r histBox-function}
+# Creating a function to plot histogram and box plot at the same time
+histPlusBox <- function(data, vbl) {
+  histogram <- ggplot(data = data, mapping = aes(x = {{ vbl }})) +
+    geom_histogram(bins = 30)
+
+  boxplot <- ggplot(data = data, mapping = aes(x = 0)) +
+    geom_boxplot(mapping = aes(y = {{ vbl }})) +
+    coord_flip()
+
+  histogram / boxplot
+}
+```
+
+### Pace
+```{r}
+histPlusBox(teamStat, Pace)
+```
+
+
+### Actual Team Winning %
+```{r}
+histPlusBox(teamStat, WIN_PERCENTAGE)
+```
+
+### Predicted Team Winning %
+```{r}
+histPlusBox(teamStat, PYTHAG_WIN)
+```
+
+### Wins
+```{r}
+histPlusBox(teamStat, W)
+```
+
+### Losses
+```{r}
+histPlusBox(teamStat, L)
+```
+
+### 2P Made Per Team
+```{r}
+histPlusBox(teamStat, X2P)
+```
+
+### 2P Attempted Per Team
+```{r}
+histPlusBox(teamStat, X2PA)
+```
+
+### 2P Percentage Per Team
+```{r}
+histPlusBox(teamStat, X2P.)
+```
+
+### 3P Made Per Team
+```{r}
+histPlusBox(teamStat, X3P)
+```
+
+### 3P Attempted Per Team
+```{r}
+histPlusBox(teamStat, X3PA)
+```
+
+### 3P Percentage Per Team
+```{r}
+histPlusBox(teamStat, X3P.)
+```
+
+### Field Goals Attempted Per Team
+```{r}
+histPlusBox(teamStat, FGA)
+```
+
+### Field Goals Made Per Team
+```{r}
+histPlusBox(teamStat, FG)
+```
+
+### Team Effective Field Goal %
+```{r}
+histPlusBox(teamStat, eFG.)
+```
+
+### FT Made Per Team
+```{r}
+histPlusBox(teamStat, FT)
+```
+
+### FT Attempted Per Team
+```{r}
+histPlusBox(teamStat, FTA)
+```
+
+### FT Percentage Per Team
+```{r}
+histPlusBox(teamStat, FT.)
+```
+
+**Initial Questions**
+
+- Impact of 3P shooting on actual wins and predicted wins?
+
+  - Compare to impact of 2P shooting
+  
+- Effective field goal percentage impact on winning ratios?
+
+- What scoring category most impacts winning?
+
+- Do attempted shots impact team performance?
+
+# Multivariate Non-graphical Analysis
+## Numerical
+
+### Correlation Table for Team Stats
+```{r cor-table}
+# Correlation table of quantitative variables
+corTab <- teamStat %>%
+  select_if(is.numeric) %>% # Use to select just the numeric variables
+  cor() %>%
+  round(2)
+kable(corTab)
+```
+
+**Comments**
+
+- Strong positive correlation between year and 3P and 3PA
+
+- Strong positive correlation between year and pace
+
+# Multivariate Graphical Analysis
+## Numeric
+
+```{r}
+teamStat %>% 
+  ggplot(mapping = aes(x = WIN_PERCENTAGE, y = PYTHAG_WIN)) +
+  geom_point(position = "jitter")
+```
+
+**Comments**
+
+- Formula is quite accurate...
+
+### Time Data
+
+#### Time ~ Median 3PAr
+```{r}
+teamStat %>% 
+  group_by(Year) %>% 
+  summarize(med3PAr = median(X3PAr)) %>% 
+  ggplot(mapping = aes(x = Year, y = med3PAr)) +
+  geom_bar(stat = "identity")
+```
+
+**Comments**
+
+- Year over year, more shots keep coming from three point range
+
+- In 2019, 3PA rate is nearly 35%!
+
+#### Time ~ Median 3PA
+```{r}
+teamStat %>% 
+  group_by(Year) %>% 
+  summarize(med3PA = median(X3PA)) %>% 
+  ggplot(mapping = aes(x = Year, y = med3PA)) +
+  geom_bar(stat = "identity")
+```
+
+**Comments**
+
+- Clear increase in 3PA over the past ten years
+
+#### Time ~ Median 3P
+```{r}
+teamStat %>% 
+  group_by(Year) %>% 
+  summarize(med3P = median(X3P)) %>% 
+  ggplot(mapping = aes(x = Year, y = med3P)) +
+  geom_bar(stat="identity")
+```
+
+**Comments**
+
+- Follows a very similar pattern
+
+#### Time ~ Median Pace
+```{r}
+teamStat %>% 
+  group_by(Year) %>% 
+  summarize(medPace = median(Pace)) %>% 
+  ggplot(mapping = aes(x = Year, y = medPace)) +
+  geom_point()
+```
+
+**Comments**
+
+- Pace has significantly increased in the past 8 years
+
+#### Time ~ Mean Wins
+```{r}
+teamStat %>% 
+  group_by(Year) %>% 
+  summarize(meanW = mean(W)) %>% 
+  ggplot(mapping = aes(x = Year, y = meanW)) +
+  geom_point()
+```
+
+**Comments**
+
+- 2012 season was shortened due to lockout.
+
+  - Ergo lower averages for the year
+
+### Team Effective FG% versus Win%
+```{r}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = eFG., y = WIN_PERCENTAGE)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+**Comments**
+
+- Chose to use PYTHAG_WIN as I'm hoping this will be helpful in establishing a benchmark for shooting for future seasons
+
+- Fairly linear relationship between effective field goal percentage and predicted wins
+
+- Found that the relationship between eFG. and other win ratios looked very similar
+  
+  - Decided not to include these comparisons
+
+### 3P Shooting
+
+#### 3PA vs. 3P Made
+```{r message = FALSE}
+teamStat %>% 
+ggplot(mapping = aes(x = X3PA, y = X3P)) +
+geom_point() +
+geom_smooth(method = lm, se = FALSE)
+```
+
+**Comments**
+
+- Clear linear relationship between 3P taken and 3P made
+
+- Ergo, if a team wants to make more 3's, they need to take more 3's
+
+#### 3P Attempted ~ Win%
+```{r message=FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X3PA, y = WIN_PERCENTAGE)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+#### 3P Made ~ Win%
+```{r message = FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X3P, y = WIN_PERCENTAGE)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+#### 3P Percentage ~ Win%
+```{r message = FALSE}
+
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X3P., y = WIN_PERCENTAGE)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+### 2P Shooting
+
+#### 2P Attempted ~ Win%
+```{r message = FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X2PA, y = WIN_PERCENTAGE, color = Year)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+
+```
+
+**Comments**
+
+- Beyond 5,000 seems to show the most noticeable negative relationship
+
+#### 2P Made ~ Win%
+```{r message = FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X2P, y = WIN_PERCENTAGE)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+#### 2P Percentage ~ Win%
+```{r message = FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X2P., y = WIN_PERCENTAGE)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+**Comments**
+
+- Supports the idea of only taking high percentage 2P shots
+
+### Free Throw Shooting
+
+#### FT Attempted ~ Predicted Wins
+```{r message = FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = FTA, y = PYTHAG_WIN)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+#### FT Made ~ Predicted Wins
+```{r message=FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = FT, y = PYTHAG_WIN)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+#### FT Percentage ~ Predicted Wins
+```{r message=FALSE}
+teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = FT., y = PYTHAG_WIN)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+```
+
+**Comments**
+
+- Free throw shooting doesn't seem to have much of an impact on predicted winning
+
+### Pace
+
+#### Pace ~ Win%
+```{r}
+teamStat %>% 
+  ggplot(mapping = aes(x = Pace, y = WIN_PERCENTAGE)) +
+  geom_point()
+```
+
+#### Pace ~ Wins
+```{r}
+teamStat %>% 
+  ggplot(mapping = aes(x = Pace, y = W)) +
+  geom_point()
+```
+
+#### Pace ~ Predicted Win%
+```{r}
+teamStat %>% 
+  ggplot(mapping = aes(x = Pace, y = PYTHAG_WIN)) +
+  geom_point()
+```
+
+
+# Detailed EDA
+
+**Questions**
+
+- Top 10 teams in 3's attempted? 2's?
+
+  - Where did these teams end up in the playoff picture?
+
+- How many 3's should a team attempt to maximize their chances at making the playoffs?
+
+  - Might be better to include this in the statistical EDA
+
+## Top 10 teams in 3PA and 2PA
+```{r message=FALSE}
+topTenOne <- teamStat %>% 
+  filter(Year == 2019) %>% 
+  select(Team, X3PA) %>% 
+  top_n(n = 10) %>% 
+  # arrange(desc(X3PA))
+  ggplot(mapping = aes(x = reorder(Team, X3PA), y = X3PA)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "7 of top 10 teams in 3PA made playoffs", x = "Team", y = "Total 3P Attempted", subtitle = "Asterisk denotes playoff team") # Asterisk denotes playoff team
+
+topTenTwo <- teamStat %>% 
+  filter(Year == 2019) %>% 
+  select(Team, X2PA) %>% 
+  top_n(n = 10) %>% 
+  # arrange(desc(X3PA))
+  ggplot(mapping = aes(x = reorder(Team, X2PA), y = X2PA)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "5 of the top 10 teams in 2PA made playoffs", x = "Team", y = "Total 2P Attempted", subtitle = "Asterisk denotes playoff team") # Asterisk denotes playoff team
+
+topTenOne / topTenTwo
+```
+
+**Comments**
+
+- 7 of 10 teams in top ten 3PA made the playoffs
+
+- Only 5 of 10 in top ten 2PA made playoffs
+
+- Data only covers the 2018-2019 season...
+
+  - Probably can't use the graph for that reason, but still interesting
+  
+## Top 10 Teams in FGA
+```{r message=FALSE}
+topTwenty <- teamStat %>% 
+  filter(Year == 2019) %>% 
+  select(Team, FGA) %>% 
+  top_n(n = 10) %>% 
+  # arrange(desc(FGA))
+  ggplot(mapping = aes(x = reorder(Team, FGA), y = FGA)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "FGA not showing a significant effect on playoff appearances", x = "Team", y = "Total Field Goals Attempted", subtitle = "Only 4 teams in top 10 FGA appeared in playoffs") # Asterisk denotes playoff team
+topTwenty
+
+```
+
+**Comments**
+
+- All teams overlap with previous top 10 graphs
+
+- Being in top 10 FGA doesn't appear to have as significant of an impact as being in the top 10 3PA or 2PA
+
+## 3P vs 2P ~ Predicted Win %
+```{r message=FALSE}
+x3pa_pythag <- teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X3PA, y = PYTHAG_WIN)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+
+x2pa_pythag <- teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X2PA, y = PYTHAG_WIN)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE)
+
+x3pa_pythag / x2pa_pythag
+```
+
+**Comments**
+
+- Not exactly what I was expecting
+
+# Statistical EDA
+
+## Initial Regression with Playoffs
+```{r}
+playoffProb <- lm(teamStat$Playoffs ~ teamStat$X3PA + teamStat$X3P + teamStat$X2PA + teamStat$X2P + teamStat$Pace + teamStat$WIN_PERCENTAGE) 
+summary(playoffProb)
+```
+
+**Comments**
+
+- Need to remove non-significant variables
+
+## Modified Regression with Playoffs
+```{r}
+# Pythag_win multiplied by 82 to get predicted NUMBER of wins
+playoffProb <- lm(teamStat$Playoffs ~ teamStat$X3PA + teamStat$X3P + teamStat$WIN_PERCENTAGE) 
+summary(playoffProb)
+```
+
+**Comments**
+
+- Surprising to see that three pointers made has a negative impact on playoff probability
+
+  - Lower p-value for 3 related variables is noted
+
+- This model would suggest to not shoot threes... Interesting.
+
+- Let's see what happens when I use predicted wins as the independent variable
+
+## Initial Regression with shooting & win ratio
+```{r}
+winPerc <- lm(teamStat$WIN_PERCENTAGE ~ teamStat$X3PA + teamStat$X3P + teamStat$X2PA + teamStat$X2P + teamStat$Pace) 
+summary(winPerc)
+```
+
+**Comments**
+
+- No real need for a modified regression
+
+- Initial theory was partially incorrect
+
+- Teams should be striving for 3P efficiency while also taking a higher amount of threes
+
+- Surpised that pace has any statistical significance, much less at the 1% level
+
+- First finding!
+
+## Initial regression with efficiency and win ratio
+```{r}
+effWin <- lm(teamStat$WIN_PERCENTAGE ~ teamStat$X3P. + teamStat$X2P. + teamStat$FT.)
+summary(effWin)
+```
+
+**Comments**
+
+- Free throw effiency not statistically significant
+
+- I wonder if defensive efficiency ratings would account for roughly 40% variation
+
+## Modified Regression
+
+```{r}
+effWin2 <- lm(teamStat$WIN_PERCENTAGE ~ teamStat$X3P. + teamStat$X2P.)
+summary(effWin2)
+```
+
+## Correlation Test: 2PA ~ Win Ratio
+```{r}
+cor.test(teamStat$X2PA, teamStat$WIN_PERCENTAGE,
+         method = "pearson")
+```
+
+**Comments**
+
+- We can say with 95% confidence, that the correlation betwee 2P attempted and win percentage will be between -35.78% and -14.58 percent
+
+- Simply put, there is a reliable negative correlation between 2P attempted and win percentage
+
+# Professional Visuals
+
+## Quantity and Efficiency ~ 3P
+```{r message=FALSE}
+x3p._pythag <- teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X3P., y = WIN_PERCENTAGE, color = Playoffs)) +
+  geom_point(position = "jitter") +
+  theme_classic() +
+  scale_color_brewer(palette = "Set1") +
+  theme(axis.ticks = element_blank(),
+        axis.line.y = element_blank(),
+        legend.position = "none") +
+  labs(title = "Shooting 38% from three means a higher win percentage", subtitle = "And likely making the playoffs", x = "3P%", y = "Actual Win %") +
+  annotate(geom = "rect", xmin = 0.38, xmax = 0.42, ymin = 0, ymax = 1, fill = "gray", alpha = 0.4) +
+  annotate(geom = "text", x = 0.36, y = 0.905, label = "Blue denotes playoff teams")
+
+x3p._pythag
+```
+
+
+```{r}
+ggsave(filename = "finding1.jpg", plot = x3p._pythag, width = 9)
+```
+
+## 2PA ~ Win Ratio by Year
+```{r message = FALSE}
+memo2 <- teamStat %>% 
+  mutate(Year = fct_recode(Year, `10-12` = "2010", `10-12` = "2011", `12-14` = "2012", `12-14` = "2013", `14-16` = "2014", `14-16` = "2015", `16-18` = "2016", `16-18` = "2017", `18-20` = "2018", `18-20` = "2019")) %>% 
+  group_by(Team, Year) %>% 
+  ggplot(mapping = aes(x = X2PA, y = WIN_PERCENTAGE, color = Year)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  theme_classic() +
+  theme(axis.ticks.x = element_blank(), axis.line.y = element_blank(), axis.ticks.y = element_blank(), legend.position = "none") +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Beyond 5,000 2PA hurts win%", subtitle = "Each plot accounts for two years, starting in 2010", x = "Total 2P Attempted", y = "Win Percentage") +
+  geom_vline(xintercept = 5000) +
+  facet_grid(~ Year)
+memo2
+```
+
+```{r message = FALSE}
+ggsave(filename = "finding2.jpg", plot = memo2, width = 9)
+```

@@ -1,0 +1,208 @@
+---
+title: "Analysis of Seven Seconds or Less in the NBA"
+date: "5/27/2020"
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r echo = FALSE}
+# Course: Communicating Data
+# Purpose: Provide an analysis on whether the 7 second offense is productive in improving overall win percentage in the NBA.
+# Date: May 27, 2020
+
+```
+
+```{r echo = FALSE, message = FALSE}
+# Clear environment of variables and functions
+rm(list = ls(all = TRUE)) 
+
+# Clear environmet of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), detach, character.only = TRUE, unload = TRUE)
+
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(kableExtra)
+library(plotly)
+library(stringr)
+library(RColorBrewer)
+library(forcats)
+```
+
+```{r echo = FALSE, message = FALSE}
+teamStat <- read.csv("teamStat.csv") # TEAM STATS
+opponentStat <- read.csv("opponStat.csv") # Only used for join
+winLoss <- read.csv("winLoss.csv") # Only used for join
+```
+
+```{r echo = FALSE, message = FALSE}
+names(opponentStat)[names(opponentStat)=="PTS"] <- "PTS_ALLOWED"
+names(teamStat)[names(teamStat)=="PTS"] <- "PTS_FOR"
+```
+
+```{r echo = FALSE, message = FALSE}
+# Reorder data so that cbind function will work correctly
+teamStat <- teamStat[order(teamStat$Team),]
+opponentStat <- opponentStat[order(opponentStat$Team),]
+winLoss <- winLoss[order(winLoss$Team),]
+
+# Join the points allowed column to teamStat data
+teamStat <- cbind(teamStat, PTS_ALLOWED = opponentStat$PTS_ALLOWED)
+# Join Win and Losses column to teamStat data
+teamStat <- cbind(teamStat, W = winLoss$W)
+teamStat <- cbind(teamStat, L = winLoss$L)
+teamStat <- cbind(teamStat, Pace = winLoss$Pace)
+
+# Reorder by Wins
+teamStat <- arrange(teamStat, -W)
+```
+
+```{r echo = FALSE, message = FALSE}
+# Convert necessary variables to factors
+teamStat$Team <- as.factor(teamStat$Team)
+teamStat$Year <- as.factor(teamStat$Year)
+```
+
+```{r echo = FALSE, message = FALSE}
+# Add Playoffs variable
+teamStat$Playoffs = grepl("\\*", teamStat$Team)
+
+# Add pythagorean expectation column
+# Output is the EXPECTED win to loss ratio for each team (i.e. 0.75 = 75% win percentage)
+teamStat$PYTHAG_WIN <- teamStat$PTS_FOR ^ 13.91 / (teamStat$PTS_FOR ^ 13.91 + teamStat$PTS_ALLOWED ^ 13.91)
+
+# Add the ACTUAL win-loss ratio
+teamStat$WIN_PERCENTAGE <- teamStat$W / (teamStat$W + teamStat$L)
+
+# Add effective field goal percentage for teamStat
+teamStat$eFG. <- (teamStat$FG + (0.5 * teamStat$X3P)) / teamStat$FGA
+
+# Add 3PAr variable
+teamStat$X3PAr <- teamStat$X3PA / teamStat$FGA
+```
+
+## Introduction to 7 Seconds or Less
+
+<div style="float: left; width: 55%;">
+
++ Pioneered by Mike D'Antoni while at the Phoenix Suns (now with Houston Rockets) in 2004
+
++ The Suns went from a 28-54 record in 2003, to 62-20 the next season
+  
++ The strategy:
+
+  - More field goals attempted leads to more field goals made
+
+  - The goal was to get a shot up in less than 7 seconds for every offensive possession
+  
+  - Often criticized because of the lack of concentration on the defensive end
+  
++ In short, the offense is focused on three areas:
+
+  - High volume three point shooting
+  
+  - High percentage two point shots from within the painted area
+  
+  - Minimize opportunities for turnovers
+
+</div>
+
+<div style="float: left; width: 45%;">
+
+<img src="download.jpg" alt="Steve Nash (left) and Mike D'Antoni (right)">
+
+
+</div>
+
+
+## Regarding 3-Point Efficiency
+
+<div style="float: left; width: 48%;">
+
++ Initial theory was that a high volume of 3P attempts (alone) would increase win percentage.
+
+  - It turns out, there needs to be a level of efficiency to go along with the high attempt rate.
+  
++ 38% appears to be the magical efficiency rating
+
+  - Remember, 3PA is important too!
+
+  - There's a big difference between shooting 4/10 (12 points) from three, versus shooting 12/30 (36 points)
+  
++ Incidentally, it turns out that because of the increased win percentage, chances of making the playoffs also improve
+
+</div>
+
+<div style="float: left; width: 52%;">
+```{r echo = FALSE, message = FALSE}
+memo1 <- teamStat %>% 
+  group_by(Team) %>% 
+  ggplot(mapping = aes(x = X3P., y = WIN_PERCENTAGE, color = Playoffs)) +
+  geom_point(position = "jitter") +
+  theme_classic() +
+  scale_color_brewer(palette = "Set1") +
+  theme(axis.ticks = element_blank(),
+        axis.line.y = element_blank(),
+        legend.position = "none") +
+  labs(title = "Shooting 38% from three means a higher win percentage", subtitle = "And likely making the playoffs", x = "3P%", y = "Actual Win %") +
+  annotate(geom = "rect", xmin = 0.38, xmax = 0.42, ymin = 0, ymax = 1, fill = "gray", alpha = 0.4) +
+  annotate(geom = "text", x = 0.36, y = 0.905, label = "Blue denotes playoff teams")
+
+memo1
+```
+</div>
+
+## Data Suggests Limiting Two-Point Attempts
+
+<div style="float: left; width: 50%;">
+
++ Teams should only be attempting a maximum of 61 2P shots per game over the course of a season
+  
++ Take less, make more
+
+  - A team's goal should be to take less 2P, but make them with high efficiency
+  
+  - This is what the Suns and Rockets have done with D'Antoni as their coach
+  
+  - Take less 2P, but when one is taken, make sure it's a high percentage shot
+  
++ Take the previous example:
+  
+  - To score 36 points on 40% shooting from three takes 30 possessions
+  
+  - To score 36 points on 40% shooting from two takes 45 possessions (+15)!
+
+</div>
+
+<div style="float: left; width: 50%;">
+```{r message = FALSE}
+memo2 <- teamStat %>% 
+  mutate(Year = fct_recode(Year, `10-12` = "2010", `10-12` = "2011", `12-14` = "2012", `12-14` = "2013", `14-16` = "2014", `14-16` = "2015", `16-18` = "2016", `16-18` = "2017", `18-20` = "2018", `18-20` = "2019")) %>% 
+  group_by(Team, Year) %>% 
+  ggplot(mapping = aes(x = X2PA, y = WIN_PERCENTAGE, color = Year)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  theme_classic() +
+  theme(axis.ticks.x = element_blank(), axis.line.y = element_blank(), axis.ticks.y = element_blank(), legend.position = "none") +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Beyond 5,000 2PA hurts win%", subtitle = "Each plot accounts for two years, starting in 2010", x = "Total 2P Attempted", y = "Win Percentage") +
+  geom_vline(xintercept = 5000) +
+  facet_grid(~ Year)
+memo2
+```
+</div>
+
+## Wrap-Up
+
++ The 7 Seconds or Less philosophy has been incredibly effective in the past two decades
+
++ Much of the strategy correlates to a higher win percentage
+
++ Suggestions to NBA front offices, coaches, and players:
+
+  - Take more threes, while maintaining a 38% success rate
+  
+  - Take less twos, but make them at a more frequent rate
